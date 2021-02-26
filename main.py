@@ -3,6 +3,7 @@
 # Standard library imports
 import sys
 import json
+import os.path as osp
 
 # Third party imports
 import qdarkstyle
@@ -11,7 +12,7 @@ from qtpy.QtCore import Qt, QUrl, Signal, Slot, QRect, QSize, QPoint
 from qtpy.QtGui import QPixmap, QIcon, QPainter
 from qtpy.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QProgressBar, QLineEdit,
-                            QToolTip, QDial)
+                            QToolTip, QDial, QAction, QFileDialog, QMessageBox)
 from qtpy.QtMultimedia import QMediaPlayer
 
 
@@ -80,6 +81,8 @@ class MusicProgressBar(QProgressBar):
 
 
 class MainWindow(QMainWindow):
+    max_recent_files = 10
+
     def __init__(self):
         super().__init__()
 
@@ -89,14 +92,17 @@ class MainWindow(QMainWindow):
         icon.addPixmap(QPixmap('ok_64x64.ico'), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
-        self.config = {}
-        self.load_config()
+        self.recent_file_acts = []
+        self.init_menu()
+
+        # Setting
+        self.setting = {}
+        self.load_setting()
 
         # Player
-        path = "/home/ok97465/a.mp3"
-        self.play_latency = 100
-        self.player = QMediaPlayer(None, QMediaPlayer.LowLatency)
-        self.player.setMedia(QUrl.fromLocalFile(path))
+        self.play_latency = 0
+        # self.player = QMediaPlayer(None, QMediaPlayer.LowLatency)
+        self.player = QMediaPlayer(None)
         self.player.mediaStatusChanged.connect(self.qmp_status_changed)
         self.player.positionChanged.connect(self.qmp_position_changed)
         self.player.setNotifyInterval(50)
@@ -152,11 +158,101 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
-    def load_config(self):
-        """Load config file."""
+        # Auto Play
+        self.update_recent_file_action()
+        path = self.setting.get('LastPlayedPath', '')
+        if osp.isfile(path):
+            self.player.setMedia(QUrl.fromLocalFile(path))
+
+    def init_menu(self):
+        """Init menu."""
+        color_icon = '#87939A'
+        menu_bar = self.menuBar()
+        menu_bar.setNativeMenuBar(False)  # Don't use mac native menu bar
+
+        # File
+        file_menu = menu_bar.addMenu('&File')
+
+        # Open
+        open_action = QAction(
+            qta.icon("ei.folder-open", color=color_icon), '&Open', self)
+        open_action.setShortcut('Ctrl+O')
+        open_action.setStatusTip('Open mp3')
+        open_action.triggered.connect(self.open_mp3)
+        file_menu.addAction(open_action)
+        file_menu.addSeparator()
+
+        # Recent Files
+        for i in range(MainWindow.max_recent_files):
+            self.recent_file_acts.append(
+                QAction(self, visible=False, triggered=self.load_recent_mp3))
+        for i in range(MainWindow.max_recent_files):
+            file_menu.addAction(self.recent_file_acts[i])
+
+        file_menu.addSeparator()
+
+        # Exit
+        exit_action = QAction(
+            qta.icon("mdi.exit-run", color=color_icon), '&Exit', self)
+        exit_action.setShortcut('Ctrl+Q')
+        exit_action.setStatusTip('Exit App')
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        # Help
+        help_menu = menu_bar.addMenu('&Help')
+        about_action = QAction("&About", self,
+                                statusTip="Show the application's About box",
+                                triggered=self.about)
+        help_menu.addAction(about_action)
+
+    def about(self):
+        """Show messagebox for about."""
+        QMessageBox.about(
+            self, "About mp3 player a/b loop",
+            "The Mp3 player a/b loop is made by <b>ok97465</b>")
+
+    def update_recent_file_action(self):
+        """Update recent file action."""
+        files = self.setting.get('recent_files', [])
+
+        num_recent_files = min(len(files), MainWindow.max_recent_files)
+
+        for i in range(num_recent_files):
+            text = osp.splitext(osp.basename(files[i]))[0]
+            self.recent_file_acts[i].setText(text)
+            self.recent_file_acts[i].setData(files[i])
+            self.recent_file_acts[i].setVisible(True)
+
+        for j in range(num_recent_files, MainWindow.max_recent_files):
+            self.recent_file_acts[j].setVisible(False)
+
+    def open_mp3(self):
+        """Open mp3."""
+        fname = QFileDialog.getOpenFileName(
+            self, 'Open mp3 file', '/home/ok97465', filter='*.mp3')
+        self.load_mp3(fname[0])
+
+    def load_mp3(self, path: str):
+        """Load mp3"""
+        if path.startswith('file://'):
+            path = path[7:]
+        if not osp.isfile(path):
+            return
+        self.save_current_media_info()
+        self.player.setMedia(QUrl.fromLocalFile(path))
+
+    def load_recent_mp3(self):
+        """Load recent mp3."""
+        action = self.sender()
+        if action:
+            self.load_mp3(action.data())
+
+    def load_setting(self):
+        """Load setting file."""
         try:
-            with open('config.json', 'r') as fp:
-                self.config = json.load(fp)
+            with open('setting.json', 'r') as fp:
+                self.setting = json.load(fp)
         except FileNotFoundError:
             pass
 
@@ -239,8 +335,19 @@ class MainWindow(QMainWindow):
 
             # read previous position
             path = self.player.currentMedia().resources()[0].url().url()
-            position = self.config.get(path, 0)
+            position = self.setting.get(path, 0)
             self.player.setPosition(position)
+
+            # update recent files
+            files = self.setting.get("recent_files", [])
+            try:
+                files.remove(path)
+            except ValueError:
+                pass
+            files.insert(0, path)
+            del files[MainWindow.max_recent_files:]
+            self.setting['recent_files'] = files
+            self.update_recent_file_action()
 
     def qmp_position_changed(self, position_ms: int):
         """Handle position of qmedia if the position is changed."""
@@ -262,16 +369,28 @@ class MainWindow(QMainWindow):
         """Set the position of Qmedia."""
         self.player.setPosition(position_ms)
 
-    def closeEvent(self, event):
-        """Save configuration."""
-        path = self.player.currentMedia().resources()[0].url().url()
+    def save_current_media_info(self):
+        """Save current media info to setting file."""
+        res = self.player.currentMedia().resources()
+        if not res:
+            return
+        path = res[0].url().url()
         position = self.player.position()
+        self.setting[path] = position
 
-        self.config[path] = position
-        config_json = json.dumps(self.config)
+        if path.startswith('file://'):
+            path = path[7:]
+        self.setting['LastPlayedPath'] = path
 
-        with open('config.json', 'w') as fp:
-            fp.write(config_json)
+        self.player.stop()
+
+    def closeEvent(self, event):
+        """Save setting."""
+        self.save_current_media_info()
+        setting_json = json.dumps(self.setting)
+
+        with open('setting.json', 'w') as fp:
+            fp.write(setting_json)
 
 
 if __name__ == '__main__':
