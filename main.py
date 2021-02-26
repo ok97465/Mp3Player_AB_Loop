@@ -115,12 +115,14 @@ class MainWindow(QMainWindow):
         self.pos_loop_b = None
 
         # Layout
+        self.ico_play = qta.icon("fa.play")
+        self.ico_pause = qta.icon("fa.pause")
         layout = QHBoxLayout()
         layout_btn_progress = QVBoxLayout()
         layout_mp3_btns = QHBoxLayout()
         self.btn_rewind = QPushButton(qta.icon("fa.backward"), '', self)
         self.btn_rewind.clicked.connect(self.rewind)
-        self.btn_play = QPushButton(qta.icon("fa.play"), '', self)
+        self.btn_play = QPushButton(self.ico_play, '', self)
         self.btn_play.clicked.connect(self.play)
         self.btn_fastforward = QPushButton(qta.icon("fa.forward"), '', self)
         self.btn_fastforward.clicked.connect(self.fastforward)
@@ -294,8 +296,10 @@ class MainWindow(QMainWindow):
         """Play mp3."""
         if self.player.state() == QMediaPlayer.PlayingState:
             self.player.pause()
+            self.btn_play.setIcon(self.ico_play)
         else:
             self.player.play()
+            self.btn_play.setIcon(self.ico_pause)
 
     def control_volume(self, step: int):
         """Control volume."""
@@ -325,6 +329,7 @@ class MainWindow(QMainWindow):
 
     def qmp_status_changed(self):
         """Handle status of QMediaPlayer if the status is changed."""
+        status = self.player.mediaStatus()
         if self.player.mediaStatus() == QMediaPlayer.LoadedMedia:
             duration_ms = self.player.duration()
             self.duration_ms = duration_ms
@@ -348,6 +353,13 @@ class MainWindow(QMainWindow):
             del files[MainWindow.max_recent_files:]
             self.setting['recent_files'] = files
             self.update_recent_file_action()
+
+        # Player state
+        state = self.player.state()
+        if state == QMediaPlayer.PausedState:
+            self.btn_play.setIcon(self.ico_play)
+        elif state == QMediaPlayer.PlayingState:
+            self.btn_play.setIcon(self.ico_pause)
 
     def qmp_position_changed(self, position_ms: int):
         """Handle position of qmedia if the position is changed."""
