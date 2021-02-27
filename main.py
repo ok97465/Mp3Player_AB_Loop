@@ -8,7 +8,7 @@ import os.path as osp
 # Third party imports
 import qdarkstyle
 import qtawesome as qta
-from qtpy.QtCore import Qt, QUrl, Signal, Slot, QRect, QSize, QPoint
+from qtpy.QtCore import Qt, QUrl, Signal, Slot, QRect, QSize, QPoint, QTimer
 from qtpy.QtGui import QPixmap, QIcon, QPainter
 from qtpy.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QProgressBar, QLineEdit,
@@ -23,7 +23,7 @@ QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # use highdpi icons
 
 def ms2min_sec(ms: int):
     """Convert milliseconds to 'minutes:seconds'."""
-    min_sec = f'{int(ms / 60000)}:{int(ms / 1000) % 60:02d}'
+    min_sec = f'{int(ms / 60000):02d}:{int(ms / 1000) % 60:02d}'
     return min_sec
 
 
@@ -95,14 +95,21 @@ class MainWindow(QMainWindow):
         self.recent_file_acts = []
         self.init_menu()
 
+        # Status bar
+        self.learning_time_ms = 0
+        self.statusBar()
+        self.statusBar().showMessage('Learning time: 00:00 sec')
+        self.timer_learning_time = QTimer(self)
+        self.timer_learning_time.timeout.connect(self.update_learning_time)
+        self.timer_learning_time.setInterval(1000)
+
         # Setting
         self.setting = {}
         self.load_setting()
 
         # Player
-        self.play_latency = 0
         # self.player = QMediaPlayer(None, QMediaPlayer.LowLatency)
-        self.player = QMediaPlayer(None)
+        self.player = QMediaPlayer(self)
         self.player.mediaStatusChanged.connect(self.qmp_status_changed)
         self.player.positionChanged.connect(self.qmp_position_changed)
         self.player.setNotifyInterval(50)
@@ -204,8 +211,8 @@ class MainWindow(QMainWindow):
         # Help
         help_menu = menu_bar.addMenu('&Help')
         about_action = QAction("&About", self,
-                                statusTip="Show the application's About box",
-                                triggered=self.about)
+                               statusTip="Show the application's About box",
+                               triggered=self.about)
         help_menu.addAction(about_action)
 
     def about(self):
@@ -260,20 +267,27 @@ class MainWindow(QMainWindow):
 
     def keyPressEvent(self, event):
         key = event.key()
-        if key == Qt.Key_H:
-            self.rewind(ms=5000)
-        elif key == Qt.Key_L:
-            self.fastforward(ms=5000)
-        if key == Qt.Key_J:
-            self.rewind(ms=1000 * 60)
-        elif key == Qt.Key_K:
-            self.fastforward(ms=1000 * 60)
-        elif key == Qt.Key_Up:
-            self.control_volume(5)
-        elif key == Qt.Key_Down:
-            self.control_volume(-5)
-        elif key == Qt.Key_I:
-            self.set_ab_loop()
+        shift = event.modifiers() & Qt.ShiftModifier
+        if shift:
+            if key == Qt.Key_O:
+                self.adjust_ab_loop(-100)
+        else:
+            if key == Qt.Key_H:
+                self.rewind(ms=5000)
+            elif key == Qt.Key_L:
+                self.fastforward(ms=5000)
+            if key == Qt.Key_J:
+                self.rewind(ms=1000 * 60)
+            elif key == Qt.Key_K:
+                self.fastforward(ms=1000 * 60)
+            elif key == Qt.Key_Up:
+                self.control_volume(5)
+            elif key == Qt.Key_Down:
+                self.control_volume(-5)
+            elif key == Qt.Key_I:
+                self.set_ab_loop()
+            elif key == Qt.Key_O:
+                self.adjust_ab_loop(500)
 
         super().keyPressEvent(event)
 
@@ -283,23 +297,31 @@ class MainWindow(QMainWindow):
             self.pos_loop_b = None
             self.pos_loop_a = None
         elif self.pos_loop_a:
-            self.pos_loop_b = self.player.position() + self.play_latency
+            self.pos_loop_b = self.player.position()
             self.player.setPosition(self.pos_loop_a)
         else:
-            self.pos_loop_a = self.player.position() + self.play_latency
+            self.pos_loop_a = self.player.position()
 
         self.progressbar.pos_loop_a = self.pos_loop_a
         self.progressbar.pos_loop_b = self.pos_loop_b
         self.progressbar.repaint()
+
+    def adjust_ab_loop(self, offset_ms):
+        """Adjust A/B loop."""
+        if self.pos_loop_b:
+            self.pos_loop_b += offset_ms
+            self.pos_loop_a += offset_ms
 
     def play(self):
         """Play mp3."""
         if self.player.state() == QMediaPlayer.PlayingState:
             self.player.pause()
             self.btn_play.setIcon(self.ico_play)
+            self.timer_learning_time.stop()
         else:
             self.player.play()
             self.btn_play.setIcon(self.ico_pause)
+            self.timer_learning_time.start()
 
     def control_volume(self, step: int):
         """Control volume."""
@@ -330,7 +352,7 @@ class MainWindow(QMainWindow):
     def qmp_status_changed(self):
         """Handle status of QMediaPlayer if the status is changed."""
         status = self.player.mediaStatus()
-        if self.player.mediaStatus() == QMediaPlayer.LoadedMedia:
+        if status == QMediaPlayer.LoadedMedia:
             duration_ms = self.player.duration()
             self.duration_ms = duration_ms
             self.duration_str = ms2min_sec(duration_ms)
@@ -356,10 +378,12 @@ class MainWindow(QMainWindow):
 
         # Player state
         state = self.player.state()
-        if state == QMediaPlayer.PausedState:
+        if state in [QMediaPlayer.PausedState, QMediaPlayer.StoppedState]:
             self.btn_play.setIcon(self.ico_play)
+            self.timer_learning_time.stop()
         elif state == QMediaPlayer.PlayingState:
             self.btn_play.setIcon(self.ico_pause)
+            self.timer_learning_time.start()
 
     def qmp_position_changed(self, position_ms: int):
         """Handle position of qmedia if the position is changed."""
@@ -367,10 +391,9 @@ class MainWindow(QMainWindow):
             if ((position_ms == self.duration_ms)
                     or (self.pos_loop_b < position_ms)):
                 self.player.setPosition(self.pos_loop_a)
-        else:
-            self.progressbar.setValue(position_ms)
-            self.elapsed_time.setText(
-                f'{ms2min_sec(position_ms)} / {self.duration_str}')
+        self.progressbar.setValue(position_ms)
+        self.elapsed_time.setText(
+            f'{ms2min_sec(position_ms)} / {self.duration_str}')
 
     def qdial_changed(self, pos: int):
         """Handle Qdial position."""
@@ -395,6 +418,13 @@ class MainWindow(QMainWindow):
         self.setting['LastPlayedPath'] = path
 
         self.player.stop()
+        self.timer_learning_time.stop()
+
+    def update_learning_time(self):
+        """Update learning time."""
+        self.learning_time_ms += 1000
+        self.statusBar().showMessage(
+            f'Learning time : {ms2min_sec(self.learning_time_ms)} sec')
 
     def closeEvent(self, event):
         """Save setting."""
