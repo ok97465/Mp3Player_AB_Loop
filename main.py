@@ -12,12 +12,13 @@ from datetime import datetime
 import qdarkstyle
 import qtawesome as qta
 from pydub import AudioSegment
-from qtpy.QtCore import (Qt, QUrl, Signal, Slot, QRect, QSize, QPoint, QTimer,
+from qtpy.QtCore import (Qt, Signal, Slot, QRect, QSize, QPoint, QTimer,
                          QIODevice, QBuffer)
 from qtpy.QtGui import QPixmap, QIcon, QPainter
 from qtpy.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QProgressBar, QLineEdit,
-                            QToolTip, QDial, QAction, QFileDialog, QMessageBox)
+                            QToolTip, QDial, QAction, QFileDialog, QMessageBox,
+                            QLabel, QFrame)
 from qtpy.QtMultimedia import QMediaPlayer, QMediaContent
 
 
@@ -30,6 +31,13 @@ def ms2min_sec(ms: int):
     """Convert milliseconds to 'minutes:seconds'."""
     min_sec = f'{int(ms / 60000):02d}:{int(ms / 1000) % 60:02d}'
     return min_sec
+
+
+class VLine(QFrame):
+    # a simple VLine, like the one you get from designer
+    def __init__(self):
+        super(VLine, self).__init__()
+        self.setFrameShape(QFrame.VLine)
 
 
 class MusicProgressBar(QProgressBar):
@@ -109,10 +117,16 @@ class MainWindow(QMainWindow):
         self.learning_time_ms = 0
         self.learning_time_ms_total = self.setting.get(
             'learning_time_ms_total', 0)
-        self.statusBar()
-        self.statusBar().showMessage(
+        self.status_bar = self.statusBar()
+        self.label_learning_time = QLabel(self)
+        self.label_learning_time.setAlignment(Qt.AlignRight)
+
+        self.status_bar.addPermanentWidget(self.label_learning_time)
+        self.label_learning_time.setText(
             f'Learning time: 00:00 sec'
             f' / total {ms2min_sec(self.learning_time_ms_total)} sec')
+
+        # Timer for learning time
         self.timer_learning_time = QTimer(self)
         self.timer_learning_time.timeout.connect(self.update_learning_time)
         self.timer_learning_time.setInterval(1000)
@@ -134,6 +148,8 @@ class MainWindow(QMainWindow):
         self.pos_loop_b = None
 
         # Layout
+        self.label_mp3 = QLabel("No mp3", self)
+
         self.ico_play = qta.icon("fa.play")
         self.ico_pause = qta.icon("fa.pause")
         layout = QHBoxLayout()
@@ -164,6 +180,7 @@ class MainWindow(QMainWindow):
         layout_progress.addWidget(self.progressbar)
         layout_progress.addWidget(self.elapsed_time)
 
+        layout_btn_progress.addWidget(self.label_mp3)
         layout_btn_progress.addLayout(layout_mp3_btns)
         layout_btn_progress.addLayout(layout_progress)
 
@@ -256,6 +273,7 @@ class MainWindow(QMainWindow):
 
     def open_mp3(self):
         """Open mp3."""
+        self.stop()
         fname = QFileDialog.getOpenFileName(
             self, 'Open mp3 file', '/home/ok97465', filter='*.mp3')
         self.load_mp3(fname[0])
@@ -265,8 +283,6 @@ class MainWindow(QMainWindow):
         if not osp.isfile(path):
             return
         self.path_media = path
-        self.save_current_media_info()
-        self.stop()
 
         fp = io.BytesIO()
         self.mp3_data = AudioSegment.from_file(path)
@@ -279,6 +295,7 @@ class MainWindow(QMainWindow):
         """Load recent mp3."""
         action = self.sender()
         if action:
+            self.stop()
             self.load_mp3(action.data())
 
     def load_setting(self):
@@ -364,11 +381,16 @@ class MainWindow(QMainWindow):
             self.timer_learning_time.start()
 
     def stop(self):
+        """Stop."""
+        self.save_current_media_info()
         self.player.stop()
         self.player_buf.close()
+        self.path_media = ''
         self.pos_loop_b = None
         self.pos_loop_a = None
         self.timer_learning_time.stop()
+        self.label_mp3.setText("No mp3")
+        self.btn_play.setIcon(self.ico_play)
 
     def control_volume(self, step: int):
         """Control volume."""
@@ -399,12 +421,14 @@ class MainWindow(QMainWindow):
     def qmp_status_changed(self):
         """Handle status of QMediaPlayer if the status is changed."""
         status = self.player.mediaStatus()
-        if status == QMediaPlayer.LoadedMedia:
+        if status == QMediaPlayer.LoadedMedia and self.path_media:
             duration_ms = self.player.duration()
             self.duration_ms = duration_ms
             self.duration_str = ms2min_sec(duration_ms)
             self.elapsed_time.setText(f'00:00 / {self.duration_str}')
             self.progressbar.setMaximum(duration_ms)
+            mp3_basename = osp.splitext(osp.basename(self.path_media))[0]
+            self.label_mp3.setText(mp3_basename)
             self.player.play()
 
             # read previous position
@@ -455,22 +479,22 @@ class MainWindow(QMainWindow):
         """Save current media info to setting file."""
         if not osp.isfile(self.path_media):
             return
-        if self.player.state() == QMediaPlayer.PlayingState:
+        if (self.player.state() == QMediaPlayer.PlayingState
+                and self.path_media):
             position = self.player.position()
             self.setting[self.path_media] = position
-        self.setting['LastPlayedPath'] = self.path_media
+            self.setting['LastPlayedPath'] = self.path_media
 
     def update_learning_time(self):
         """Update learning time."""
         self.learning_time_ms += 1000
         self.learning_time_ms_total += 1000
-        self.statusBar().showMessage(
+        self.label_learning_time.setText(
             f'Learning time : {ms2min_sec(self.learning_time_ms)} sec'
             f' / total : {ms2min_sec(self.learning_time_ms_total)} sec')
 
     def closeEvent(self, event):
         """Save setting."""
-        self.save_current_media_info()
         self.stop()
         self.setting['learning_time_ms_total'] = self.learning_time_ms_total
         setting_json = json.dumps(self.setting)
