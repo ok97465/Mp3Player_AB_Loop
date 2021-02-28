@@ -4,6 +4,8 @@
 import sys
 import json
 import os.path as osp
+import sqlite3
+from datetime import datetime
 
 # Third party imports
 import qdarkstyle
@@ -94,18 +96,23 @@ class MainWindow(QMainWindow):
 
         self.recent_file_acts = []
         self.init_menu()
-
-        # Status bar
-        self.learning_time_ms = 0
-        self.statusBar()
-        self.statusBar().showMessage('Learning time: 00:00 sec')
-        self.timer_learning_time = QTimer(self)
-        self.timer_learning_time.timeout.connect(self.update_learning_time)
-        self.timer_learning_time.setInterval(1000)
+        self.now = datetime.now()
 
         # Setting
         self.setting = {}
         self.load_setting()
+
+        # Status bar
+        self.learning_time_ms = 0
+        self.learning_time_ms_total = self.setting.get(
+            'learning_time_ms_total', 0)
+        self.statusBar()
+        self.statusBar().showMessage(
+            f'Learning time: 00:00 sec'
+            f' / total {ms2min_sec(self.learning_time_ms_total)} sec')
+        self.timer_learning_time = QTimer(self)
+        self.timer_learning_time.timeout.connect(self.update_learning_time)
+        self.timer_learning_time.setInterval(1000)
 
         # Player
         # self.player = QMediaPlayer(None, QMediaPlayer.LowLatency)
@@ -288,6 +295,8 @@ class MainWindow(QMainWindow):
                 self.set_ab_loop()
             elif key == Qt.Key_O:
                 self.adjust_ab_loop(500)
+            elif key == Qt.Key_Space:
+                self.play()
 
         super().keyPressEvent(event)
 
@@ -423,16 +432,35 @@ class MainWindow(QMainWindow):
     def update_learning_time(self):
         """Update learning time."""
         self.learning_time_ms += 1000
+        self.learning_time_ms_total += 1000
         self.statusBar().showMessage(
-            f'Learning time : {ms2min_sec(self.learning_time_ms)} sec')
+            f'Learning time : {ms2min_sec(self.learning_time_ms)} sec'
+            f' / total : {ms2min_sec(self.learning_time_ms_total)} sec')
 
     def closeEvent(self, event):
         """Save setting."""
         self.save_current_media_info()
+        self.setting['learning_time_ms_total'] = self.learning_time_ms_total
         setting_json = json.dumps(self.setting)
 
         with open('setting.json', 'w') as fp:
             fp.write(setting_json)
+
+        now = self.now
+        cur = sqlite3.connect("history.db")
+        cur.execute(
+            'CREATE TABLE IF NOT EXISTS LearningTimeData('
+            'DayOfWeek INTEGER, '
+            'month  INTEGER, '
+            'day INTEGER,  '
+            'timestamp REAL, '
+            'LearningTime_ms INTEGER)')
+        cur.execute(
+            "insert into LearningTimeData Values (?,?,?,?,?)",
+            (now.weekday(), now.month, now.day, now.timestamp(),
+             self.learning_time_ms))
+        cur.commit()
+        cur.close()
 
 
 if __name__ == '__main__':
