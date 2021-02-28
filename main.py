@@ -115,7 +115,6 @@ class MainWindow(QMainWindow):
         self.timer_learning_time.setInterval(1000)
 
         # Player
-        # self.player = QMediaPlayer(None, QMediaPlayer.LowLatency)
         self.player = QMediaPlayer(self)
         self.player.mediaStatusChanged.connect(self.qmp_status_changed)
         self.player.positionChanged.connect(self.qmp_position_changed)
@@ -140,6 +139,10 @@ class MainWindow(QMainWindow):
         self.btn_play.clicked.connect(self.play)
         self.btn_fastforward = QPushButton(qta.icon("fa.forward"), '', self)
         self.btn_fastforward.clicked.connect(self.fastforward)
+
+        self.btn_rewind.setFocusPolicy(Qt.NoFocus)
+        self.btn_play.setFocusPolicy(Qt.NoFocus)
+        self.btn_fastforward.setFocusPolicy(Qt.NoFocus)
 
         layout_mp3_btns.addWidget(self.btn_rewind)
         layout_mp3_btns.addWidget(self.btn_play)
@@ -179,6 +182,8 @@ class MainWindow(QMainWindow):
         path = self.setting.get('LastPlayedPath', '')
         if osp.isfile(path):
             self.player.setMedia(QUrl.fromLocalFile(path))
+
+        self.setFocus()
 
     def init_menu(self):
         """Init menu."""
@@ -332,6 +337,12 @@ class MainWindow(QMainWindow):
             self.btn_play.setIcon(self.ico_pause)
             self.timer_learning_time.start()
 
+    def stop(self):
+        self.player.stop()
+        self.pos_loop_b = None
+        self.pos_loop_a = None
+        self.timer_learning_time.stop()
+
     def control_volume(self, step: int):
         """Control volume."""
         volume = self.player.volume()
@@ -426,8 +437,7 @@ class MainWindow(QMainWindow):
             path = path[7:]
         self.setting['LastPlayedPath'] = path
 
-        self.player.stop()
-        self.timer_learning_time.stop()
+        self.stop()
 
     def update_learning_time(self):
         """Update learning time."""
