@@ -5,17 +5,20 @@ import sys
 import json
 import os.path as osp
 import sqlite3
+import io
 from datetime import datetime
 
 # Third party imports
 import qdarkstyle
 import qtawesome as qta
-from qtpy.QtCore import Qt, QUrl, Signal, Slot, QRect, QSize, QPoint, QTimer
+from pydub import AudioSegment
+from qtpy.QtCore import (Qt, QUrl, Signal, Slot, QRect, QSize, QPoint, QTimer,
+                         QIODevice, QBuffer)
 from qtpy.QtGui import QPixmap, QIcon, QPainter
 from qtpy.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QProgressBar, QLineEdit,
                             QToolTip, QDial, QAction, QFileDialog, QMessageBox)
-from qtpy.QtMultimedia import QMediaPlayer
+from qtpy.QtMultimedia import QMediaPlayer, QMediaContent
 
 
 # enable highdpi scaling
@@ -120,6 +123,9 @@ class MainWindow(QMainWindow):
         self.player.positionChanged.connect(self.qmp_position_changed)
         self.player.setNotifyInterval(50)
         self.player.setVolume(50)
+        self.player_buf = QBuffer()
+        self.path_media = ''
+        self.mp3_data = None
         self.duration_ms = 0
         self.duration_str = ''
 
@@ -181,7 +187,7 @@ class MainWindow(QMainWindow):
         self.update_recent_file_action()
         path = self.setting.get('LastPlayedPath', '')
         if osp.isfile(path):
-            self.player.setMedia(QUrl.fromLocalFile(path))
+            self.load_mp3(path)
 
         self.setFocus()
 
@@ -256,12 +262,18 @@ class MainWindow(QMainWindow):
 
     def load_mp3(self, path: str):
         """Load mp3"""
-        if path.startswith('file://'):
-            path = path[7:]
         if not osp.isfile(path):
             return
+        self.path_media = path
         self.save_current_media_info()
-        self.player.setMedia(QUrl.fromLocalFile(path))
+        self.stop()
+
+        fp = io.BytesIO()
+        self.mp3_data = AudioSegment.from_file(path)
+        self.mp3_data.export(fp, format='wav')
+        self.player_buf.setData(fp.getvalue())
+        self.player_buf.open(QIODevice.ReadOnly)
+        self.player.setMedia(QMediaContent(), self.player_buf)
 
     def load_recent_mp3(self):
         """Load recent mp3."""
@@ -302,6 +314,8 @@ class MainWindow(QMainWindow):
                 self.adjust_ab_loop(500)
             elif key == Qt.Key_Space:
                 self.play()
+            elif key == Qt.Key_S:
+                self.save_ab_loop()
 
         super().keyPressEvent(event)
 
@@ -326,6 +340,18 @@ class MainWindow(QMainWindow):
             self.pos_loop_b += offset_ms
             self.pos_loop_a += offset_ms
 
+    def save_ab_loop(self):
+        """Save A/B loop"""
+        if self.pos_loop_b is None:
+            return
+        self.player.pause()
+        path_new = (self.path_media[:-4]
+                    + f"{self.pos_loop_a}_{self.pos_loop_b}"
+                    + self.path_media[-4:])
+        seg = self.mp3_data[self.pos_loop_a:self.pos_loop_b]
+        seg.export(path_new, format='mp3')
+        self.player.play()
+
     def play(self):
         """Play mp3."""
         if self.player.state() == QMediaPlayer.PlayingState:
@@ -339,6 +365,7 @@ class MainWindow(QMainWindow):
 
     def stop(self):
         self.player.stop()
+        self.player_buf.close()
         self.pos_loop_b = None
         self.pos_loop_a = None
         self.timer_learning_time.stop()
@@ -381,7 +408,7 @@ class MainWindow(QMainWindow):
             self.player.play()
 
             # read previous position
-            path = self.player.currentMedia().resources()[0].url().url()
+            path = self.path_media
             position = self.setting.get(path, 0)
             self.player.setPosition(position)
 
@@ -426,18 +453,12 @@ class MainWindow(QMainWindow):
 
     def save_current_media_info(self):
         """Save current media info to setting file."""
-        res = self.player.currentMedia().resources()
-        if not res:
+        if not osp.isfile(self.path_media):
             return
-        path = res[0].url().url()
-        position = self.player.position()
-        self.setting[path] = position
-
-        if path.startswith('file://'):
-            path = path[7:]
-        self.setting['LastPlayedPath'] = path
-
-        self.stop()
+        if self.player.state() == QMediaPlayer.PlayingState:
+            position = self.player.position()
+            self.setting[self.path_media] = position
+        self.setting['LastPlayedPath'] = self.path_media
 
     def update_learning_time(self):
         """Update learning time."""
@@ -450,6 +471,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Save setting."""
         self.save_current_media_info()
+        self.stop()
         self.setting['learning_time_ms_total'] = self.learning_time_ms_total
         setting_json = json.dumps(self.setting)
 
