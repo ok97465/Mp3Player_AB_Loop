@@ -90,7 +90,7 @@ class MusicProgressBar(QProgressBar):
             self.icon_a.paint(painter, QRect(QPoint(pos, 0), self.icon_size))
         if self.pos_loop_b:
             pos = self.convert_media_pos_to_widget_pos(self.pos_loop_b)
-            self.icon_b.paint(painter, QRect(QPoint(pos, 0), self.icon_size))
+            self.icon_b.paint(painter, QRect(QPoint(pos, -3), self.icon_size))
 
 
 class MainWindow(QMainWindow):
@@ -123,8 +123,8 @@ class MainWindow(QMainWindow):
 
         self.status_bar.addPermanentWidget(self.label_learning_time)
         self.label_learning_time.setText(
-            f'Learning time: 00:00 sec'
-            f' / total {ms2min_sec(self.learning_time_ms_total)} sec')
+            f'Learning time: 00:00'
+            f' / total {ms2min_sec(self.learning_time_ms_total)}')
 
         # Timer for learning time
         self.timer_learning_time = QTimer(self)
@@ -310,22 +310,23 @@ class MainWindow(QMainWindow):
         key = event.key()
         shift = event.modifiers() & Qt.ShiftModifier
         if shift:
+
             if key == Qt.Key_O:
                 self.adjust_ab_loop(-100)
         else:
-            if key == Qt.Key_H:
+            if key in [Qt.Key_H, Qt.Key_Left, Qt.Key_A]:
                 self.rewind(ms=5000)
-            elif key == Qt.Key_L:
+            elif key in [Qt.Key_L, Qt.Key_Right, Qt.Key_D]:
                 self.fastforward(ms=5000)
-            if key == Qt.Key_J:
-                self.rewind(ms=1000 * 60)
-            elif key == Qt.Key_K:
-                self.fastforward(ms=1000 * 60)
+            elif key in [Qt.Key_J]:
+                self.rewind(ms=1000 * 38)
+            elif key in [Qt.Key_K, Qt.Key_F]:
+                self.fastforward(ms=1000 * 38)
             elif key == Qt.Key_Up:
                 self.control_volume(5)
             elif key == Qt.Key_Down:
                 self.control_volume(-5)
-            elif key == Qt.Key_I:
+            elif key in [Qt.Key_I, Qt.Key_W]:
                 self.set_ab_loop()
             elif key == Qt.Key_O:
                 self.adjust_ab_loop(500)
@@ -479,8 +480,7 @@ class MainWindow(QMainWindow):
         """Save current media info to setting file."""
         if not osp.isfile(self.path_media):
             return
-        if (self.player.state() == QMediaPlayer.PlayingState
-                and self.path_media):
+        if self.path_media:
             position = self.player.position()
             self.setting[self.path_media] = position
             self.setting['LastPlayedPath'] = self.path_media
@@ -490,8 +490,8 @@ class MainWindow(QMainWindow):
         self.learning_time_ms += 1000
         self.learning_time_ms_total += 1000
         self.label_learning_time.setText(
-            f'Learning time : {ms2min_sec(self.learning_time_ms)} sec'
-            f' / total : {ms2min_sec(self.learning_time_ms_total)} sec')
+            f'Learning time : {ms2min_sec(self.learning_time_ms)}'
+            f' / total : {ms2min_sec(self.learning_time_ms_total)}')
 
     def closeEvent(self, event):
         """Save setting."""
