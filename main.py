@@ -497,10 +497,9 @@ class MainWindow(QMainWindow):
         """Save setting."""
         self.stop()
         self.setting['learning_time_ms_total'] = self.learning_time_ms_total
-        setting_json = json.dumps(self.setting)
 
         with open('setting.json', 'w') as fp:
-            fp.write(setting_json)
+            json.dump(self.setting, fp, indent=2)
 
         now = self.now
         cur = sqlite3.connect("history.db")
