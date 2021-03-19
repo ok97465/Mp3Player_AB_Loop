@@ -21,7 +21,6 @@ from qtpy.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QLabel, QFrame)
 from qtpy.QtMultimedia import QMediaPlayer, QMediaContent
 
-
 # enable highdpi scaling
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # use highdpi icons
@@ -362,13 +361,21 @@ class MainWindow(QMainWindow):
         """Save A/B loop"""
         if self.pos_loop_b is None:
             return
-        self.player.pause()
+
+        is_playing = False
+        if self.player.state() == QMediaPlayer.PlayingState:
+            is_playing = True
+
+        if is_playing:
+            self.player.pause()
         path_new = (self.path_media[:-4]
                     + f"{self.pos_loop_a}_{self.pos_loop_b}"
                     + self.path_media[-4:])
         seg = self.mp3_data[self.pos_loop_a:self.pos_loop_b]
         seg.export(path_new, format='mp3')
-        self.player.play()
+
+        if is_playing:
+            self.player.play()
 
     def play(self):
         """Play mp3."""
