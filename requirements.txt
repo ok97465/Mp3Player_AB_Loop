@@ -3,3 +3,4 @@ pyside2
 qdarkstyle
 qtpy
 qtawesome
+webvtt-py

@@ -7,10 +7,12 @@ import os.path as osp
 import sqlite3
 import io
 from datetime import datetime
+from bisect import bisect_right
 
 # Third party imports
 import qdarkstyle
 import qtawesome as qta
+import webvtt
 from pydub import AudioSegment
 from qtpy.QtCore import (Qt, Signal, Slot, QRect, QSize, QPoint, QTimer,
                          QIODevice, QBuffer)
@@ -18,8 +20,9 @@ from qtpy.QtGui import QPixmap, QIcon, QPainter
 from qtpy.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QProgressBar, QLineEdit,
                             QToolTip, QDial, QAction, QFileDialog, QMessageBox,
-                            QLabel, QFrame)
+                            QLabel, QFrame, QPlainTextEdit)
 from qtpy.QtMultimedia import QMediaPlayer, QMediaContent
+
 
 # enable highdpi scaling
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
@@ -92,6 +95,45 @@ class MusicProgressBar(QProgressBar):
             self.icon_b.paint(painter, QRect(QPoint(pos, -3), self.icon_size))
 
 
+class LyricsDisplay(QPlainTextEdit):
+    """Display lyrics."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self.setFixedHeight(50)
+
+        self.start_time_lyrics = []
+        self.lyrics = []
+
+    def read_vtt(self, path: str):
+        self.start_time_lyrics = []
+        self.lyrics = []
+
+        if osp.isfile(path) is False:
+            return
+
+        for lyrics_info in webvtt.read(path):
+            hour = int(lyrics_info.start[:2])
+            min_ = int(lyrics_info.start[3:5])
+            millisec = int(float(lyrics_info.start[6:]) * 1000)
+            time_ms = 1000 * (hour * 60 * 60 + min_ * 60) + millisec
+            self.start_time_lyrics.append(time_ms)
+            self.lyrics.append(lyrics_info.text)
+
+        self.start_time_lyrics = self.start_time_lyrics[::2]
+        self.lyrics = self.lyrics[::2]
+
+        self.setPlainText(self.lyrics[0])
+
+    def update_media_pos(self, pos_ms):
+        if not self.lyrics:
+            return
+        idx = bisect_right(self.start_time_lyrics, pos_ms) - 1
+        idx = max([idx, 0])
+        self.setPlainText(self.lyrics[idx])
+
+
 class MainWindow(QMainWindow):
     max_recent_files = 10
 
@@ -151,7 +193,9 @@ class MainWindow(QMainWindow):
 
         self.ico_play = qta.icon("fa.play")
         self.ico_pause = qta.icon("fa.pause")
-        layout = QHBoxLayout()
+
+        layout = QVBoxLayout()
+        layout_volume = QHBoxLayout()
         layout_btn_progress = QVBoxLayout()
         layout_mp3_btns = QHBoxLayout()
         self.btn_rewind = QPushButton(qta.icon("fa.backward"), '', self)
@@ -192,8 +236,13 @@ class MainWindow(QMainWindow):
         self.qdial_volume.setValue(self.player.volume())
         self.qdial_volume.valueChanged.connect(self.qdial_changed)
 
-        layout.addLayout(layout_btn_progress)
-        layout.addWidget(self.qdial_volume)
+        layout_volume.addLayout(layout_btn_progress)
+        layout_volume.addWidget(self.qdial_volume)
+
+        # Lyrics
+        self.display_lyrics = LyricsDisplay(self)
+        layout.addLayout(layout_volume)
+        layout.addWidget(self.display_lyrics)
 
         central_widget = QWidget()
         central_widget.setLayout(layout)
@@ -282,6 +331,9 @@ class MainWindow(QMainWindow):
         if not osp.isfile(path):
             return
         self.path_media = path
+
+        path_lyrics = path[:-3] + 'vtt'
+        self.display_lyrics.read_vtt(path_lyrics)
 
         fp = io.BytesIO()
         self.mp3_data = AudioSegment.from_file(path)
@@ -473,6 +525,7 @@ class MainWindow(QMainWindow):
         self.progressbar.setValue(position_ms)
         self.elapsed_time.setText(
             f'{ms2min_sec(position_ms)} / {self.duration_str}')
+        self.display_lyrics.update_media_pos(position_ms)
 
     def qdial_changed(self, pos: int):
         """Handle Qdial position."""
