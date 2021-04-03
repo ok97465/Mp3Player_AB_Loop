@@ -229,6 +229,7 @@ class MainWindow(QMainWindow):
 
         # Volume
         self.qdial_volume = QDial(self)
+        self.qdial_volume.setMinimumWidth(110)
         self.qdial_volume.setWrapping(False)
         self.qdial_volume.setNotchesVisible(True)
         self.qdial_volume.setMinimum(0)
