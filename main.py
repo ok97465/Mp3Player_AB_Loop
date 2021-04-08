@@ -6,6 +6,7 @@ import json
 import os.path as osp
 import sqlite3
 import io
+import webbrowser
 from datetime import datetime
 from bisect import bisect_right
 
@@ -105,6 +106,7 @@ class LyricsDisplay(QPlainTextEdit):
 
         self.start_time_lyrics = []
         self.lyrics = []
+        self.setFocusPolicy(Qt.NoFocus)
 
     def read_vtt(self, path: str):
         self.start_time_lyrics = []
@@ -132,6 +134,23 @@ class LyricsDisplay(QPlainTextEdit):
         idx = bisect_right(self.start_time_lyrics, pos_ms) - 1
         idx = max([idx, 0])
         self.setPlainText(self.lyrics[idx])
+
+    def get_lyrics_in_range(self, pos_ms_start, pos_ms_end):
+        """Get lyrics in range."""
+        if not self.lyrics:
+            return []
+        idx1 = bisect_right(self.start_time_lyrics, pos_ms_start) - 1
+        idx2 = bisect_right(self.start_time_lyrics, pos_ms_end) - 1
+
+        lyrics = []
+        lyrics.extend(self.lyrics[idx1].split('\n'))
+        for idx in range(idx1 + 1, idx2 + 1):
+            _lyrics = self.lyrics[idx].split('\n')
+            if lyrics[-1] == _lyrics[0]:
+                _lyrics = _lyrics[1:]
+            lyrics.extend(_lyrics)
+
+        return ' '.join(lyrics)
 
 
 class MainWindow(QMainWindow):
@@ -386,6 +405,8 @@ class MainWindow(QMainWindow):
                 self.play()
             elif key == Qt.Key_S:
                 self.save_ab_loop()
+            elif key in [Qt.Key_Q, Qt.Key_U]:
+                self.send_AB_loop_lyrics_to_papago()
 
         super().keyPressEvent(event)
 
@@ -531,6 +552,15 @@ class MainWindow(QMainWindow):
     def qdial_changed(self, pos: int):
         """Handle Qdial position."""
         self.player.setVolume(pos)
+
+    def send_AB_loop_lyrics_to_papago(self):
+        """Send AB loop lyrics to papago."""
+        if not self.pos_loop_b:
+            return
+        lyrics = self.display_lyrics.get_lyrics_in_range(self.pos_loop_a,
+                                                         self.pos_loop_b)
+        lyrics = lyrics.replace('\n', '')
+        webbrowser.open(f'https://papago.naver.com/?sk=en&tk=ko&st={lyrics}')
 
     @Slot(int)
     def set_media_position(self, position_ms: int):
