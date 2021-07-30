@@ -1,4 +1,4 @@
-"""Mp3 Player for partial loop and partial save."""
+"""Music Player for partial loop and partial save."""
 # %% Import
 # Standard library imports
 import sys
@@ -199,7 +199,7 @@ class MainWindow(QMainWindow):
         self.player.setVolume(50)
         self.player_buf = QBuffer()
         self.path_media = ''
-        self.mp3_data = None
+        self.music_data = None
         self.duration_ms = 0
         self.duration_str = ''
 
@@ -208,7 +208,7 @@ class MainWindow(QMainWindow):
         self.pos_loop_b = None
 
         # Layout
-        self.label_mp3 = QLabel("No mp3", self)
+        self.label_music = QLabel("No music", self)
 
         self.ico_play = qta.icon("fa.play")
         self.ico_pause = qta.icon("fa.pause")
@@ -216,7 +216,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         layout_volume = QHBoxLayout()
         layout_btn_progress = QVBoxLayout()
-        layout_mp3_btns = QHBoxLayout()
+        layout_music_btns = QHBoxLayout()
         self.btn_rewind = QPushButton(qta.icon("fa.backward"), '', self)
         self.btn_rewind.clicked.connect(self.rewind)
         self.btn_play = QPushButton(self.ico_play, '', self)
@@ -228,9 +228,9 @@ class MainWindow(QMainWindow):
         self.btn_play.setFocusPolicy(Qt.NoFocus)
         self.btn_fastforward.setFocusPolicy(Qt.NoFocus)
 
-        layout_mp3_btns.addWidget(self.btn_rewind)
-        layout_mp3_btns.addWidget(self.btn_play)
-        layout_mp3_btns.addWidget(self.btn_fastforward)
+        layout_music_btns.addWidget(self.btn_rewind)
+        layout_music_btns.addWidget(self.btn_play)
+        layout_music_btns.addWidget(self.btn_fastforward)
 
         layout_progress = QHBoxLayout()
         self.progressbar = MusicProgressBar(self)
@@ -242,8 +242,8 @@ class MainWindow(QMainWindow):
         layout_progress.addWidget(self.progressbar)
         layout_progress.addWidget(self.elapsed_time)
 
-        layout_btn_progress.addWidget(self.label_mp3)
-        layout_btn_progress.addLayout(layout_mp3_btns)
+        layout_btn_progress.addWidget(self.label_music)
+        layout_btn_progress.addLayout(layout_music_btns)
         layout_btn_progress.addLayout(layout_progress)
 
         # Volume
@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
         self.update_recent_file_action()
         path = self.setting.get('LastPlayedPath', '')
         if osp.isfile(path):
-            self.load_mp3(path)
+            self.load_music_file(path)
 
         self.setFocus()
 
@@ -289,15 +289,15 @@ class MainWindow(QMainWindow):
         open_action = QAction(
             qta.icon("ei.folder-open", color=color_icon), '&Open', self)
         open_action.setShortcut('Ctrl+O')
-        open_action.setStatusTip('Open mp3')
-        open_action.triggered.connect(self.open_mp3)
+        open_action.setStatusTip('Open file')
+        open_action.triggered.connect(self.open_music_file)
         file_menu.addAction(open_action)
         file_menu.addSeparator()
 
         # Recent Files
         for i in range(MainWindow.max_recent_files):
             self.recent_file_acts.append(
-                QAction(self, visible=False, triggered=self.load_recent_mp3))
+                QAction(self, visible=False, triggered=self.load_recent_music))
         for i in range(MainWindow.max_recent_files):
             file_menu.addAction(self.recent_file_acts[i])
 
@@ -321,8 +321,8 @@ class MainWindow(QMainWindow):
     def about(self):
         """Show messagebox for about."""
         QMessageBox.about(
-            self, "About mp3 player a/b loop",
-            "The Mp3 player a/b loop is made by <b>ok97465</b>")
+            self, "About music player a/b loop",
+            "The music player a/b loop is made by <b>ok97465</b>")
 
     def update_recent_file_action(self):
         """Update recent file action."""
@@ -339,15 +339,17 @@ class MainWindow(QMainWindow):
         for j in range(num_recent_files, MainWindow.max_recent_files):
             self.recent_file_acts[j].setVisible(False)
 
-    def open_mp3(self):
-        """Open mp3."""
+    def open_music_file(self):
+        """Open music file."""
         self.stop()
         fname = QFileDialog.getOpenFileName(
-            self, 'Open mp3 file', '/home/ok97465', filter='*.mp3')
-        self.load_mp3(fname[0])
+            self,
+            'Open music file', '/home/ok97465',
+            filter='Music Files (*.mp3, *.m4a)')
+        self.load_music_file(fname[0])
 
-    def load_mp3(self, path: str):
-        """Load mp3"""
+    def load_music_file(self, path: str):
+        """Load music file"""
         if not osp.isfile(path):
             return
         self.path_media = path
@@ -356,18 +358,18 @@ class MainWindow(QMainWindow):
         self.display_lyrics.read_vtt(path_lyrics)
 
         fp = io.BytesIO()
-        self.mp3_data = AudioSegment.from_file(path)
-        self.mp3_data.export(fp, format='wav')
+        self.music_data = AudioSegment.from_file(path)
+        self.music_data.export(fp, format='wav')
         self.player_buf.setData(fp.getvalue())
         self.player_buf.open(QIODevice.ReadOnly)
         self.player.setMedia(QMediaContent(), self.player_buf)
 
-    def load_recent_mp3(self):
-        """Load recent mp3."""
+    def load_recent_music(self):
+        """Load recent music."""
         action = self.sender()
         if action:
             self.stop()
-            self.load_mp3(action.data())
+            self.load_music_file(action.data())
 
     def load_setting(self):
         """Load setting file."""
@@ -445,14 +447,14 @@ class MainWindow(QMainWindow):
         path_new = (self.path_media[:-4]
                     + f"{self.pos_loop_a}_{self.pos_loop_b}"
                     + self.path_media[-4:])
-        seg = self.mp3_data[self.pos_loop_a:self.pos_loop_b]
+        seg = self.music_data[self.pos_loop_a:self.pos_loop_b]
         seg.export(path_new, format='mp3')
 
         if is_playing:
             self.player.play()
 
     def play(self):
-        """Play mp3."""
+        """Play music file."""
         if self.player.state() == QMediaPlayer.PlayingState:
             self.player.pause()
             self.btn_play.setIcon(self.ico_play)
@@ -471,7 +473,7 @@ class MainWindow(QMainWindow):
         self.pos_loop_b = None
         self.pos_loop_a = None
         self.timer_learning_time.stop()
-        self.label_mp3.setText("No mp3")
+        self.label_music.setText("No music")
         self.btn_play.setIcon(self.ico_play)
 
     def control_volume(self, step: int):
@@ -509,8 +511,8 @@ class MainWindow(QMainWindow):
             self.duration_str = ms2min_sec(duration_ms)
             self.elapsed_time.setText(f'00:00 / {self.duration_str}')
             self.progressbar.setMaximum(duration_ms)
-            mp3_basename = osp.splitext(osp.basename(self.path_media))[0]
-            self.label_mp3.setText(mp3_basename)
+            music_basename = osp.splitext(osp.basename(self.path_media))[0]
+            self.label_music.setText(music_basename)
             self.player.play()
 
             # read previous position
