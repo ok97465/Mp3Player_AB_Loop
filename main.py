@@ -15,13 +15,36 @@ import qdarkstyle
 import qtawesome as qta
 import webvtt
 from pydub import AudioSegment
-from qtpy.QtCore import (Qt, Signal, Slot, QRect, QSize, QPoint, QTimer,
-                         QIODevice, QBuffer)
+from qtpy.QtCore import (
+    Qt,
+    Signal,
+    Slot,
+    QRect,
+    QSize,
+    QPoint,
+    QTimer,
+    QIODevice,
+    QBuffer,
+)
 from qtpy.QtGui import QPixmap, QIcon, QPainter
-from qtpy.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                            QHBoxLayout, QPushButton, QProgressBar, QLineEdit,
-                            QToolTip, QDial, QAction, QFileDialog, QMessageBox,
-                            QLabel, QFrame, QPlainTextEdit)
+from qtpy.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QProgressBar,
+    QLineEdit,
+    QToolTip,
+    QDial,
+    QAction,
+    QFileDialog,
+    QMessageBox,
+    QLabel,
+    QFrame,
+    QPlainTextEdit,
+)
 from qtpy.QtMultimedia import QMediaPlayer, QMediaContent
 
 
@@ -32,7 +55,7 @@ QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # use highdpi icons
 
 def ms2min_sec(ms: int):
     """Convert milliseconds to 'minutes:seconds'."""
-    min_sec = f'{int(ms / 60000):02d}:{int(ms / 1000) % 60:02d}'
+    min_sec = f"{int(ms / 60000):02d}:{int(ms / 1000) % 60:02d}"
     return min_sec
 
 
@@ -49,8 +72,8 @@ class MusicProgressBar(QProgressBar):
     def __init__(self, parent):
         super().__init__(parent)
         self.setMouseTracking(True)
-        self.icon_a = qta.icon('fa.caret-down', color="#33bb33")
-        self.icon_b = qta.icon('fa.caret-down', color="#bb3333")
+        self.icon_a = qta.icon("fa.caret-down", color="#33bb33")
+        self.icon_b = qta.icon("fa.caret-down", color="#bb3333")
         self.icon_size = QSize(30, 30)
         self.pos_loop_a = None
         self.pos_loop_b = None
@@ -65,16 +88,14 @@ class MusicProgressBar(QProgressBar):
     def convert_media_pos_to_widget_pos(self, media_pos: int) -> int:
         """Convert media pos to widget pos."""
         width = self.frameGeometry().width()
-        pos = int(media_pos / self.maximum() * width + 0.5
-                  - self.icon_size.width() / 2)
+        pos = int(media_pos / self.maximum() * width + 0.5 - self.icon_size.width() / 2)
         return pos
 
     def mouseMoveEvent(self, event):
         """Display a position of media if the mouse is on the progressbar."""
         x_pos = event.pos().x()
         position_ms = self.convert_mouse_pos_to_media_pos(x_pos)
-        QToolTip.showText(
-            event.globalPos(), ms2min_sec(position_ms))
+        QToolTip.showText(event.globalPos(), ms2min_sec(position_ms))
         super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
@@ -143,14 +164,14 @@ class LyricsDisplay(QPlainTextEdit):
         idx2 = bisect_right(self.start_time_lyrics, pos_ms_end) - 1
 
         lyrics = []
-        lyrics.extend(self.lyrics[idx1].split('\n'))
+        lyrics.extend(self.lyrics[idx1].split("\n"))
         for idx in range(idx1 + 1, idx2 + 1):
-            _lyrics = self.lyrics[idx].split('\n')
+            _lyrics = self.lyrics[idx].split("\n")
             if lyrics[-1] == _lyrics[0]:
                 _lyrics = _lyrics[1:]
             lyrics.extend(_lyrics)
 
-        return ' '.join(lyrics)
+        return " ".join(lyrics)
 
 
 class MainWindow(QMainWindow):
@@ -162,7 +183,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("OkPlayer")
 
         icon = QIcon()
-        icon.addPixmap(QPixmap('ok_64x64.ico'), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap("ok_64x64.ico"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
         self.recent_file_acts = []
@@ -175,16 +196,16 @@ class MainWindow(QMainWindow):
 
         # Status bar
         self.learning_time_ms = 0
-        self.learning_time_ms_total = self.setting.get(
-            'learning_time_ms_total', 0)
+        self.learning_time_ms_total = self.setting.get("learning_time_ms_total", 0)
         self.status_bar = self.statusBar()
         self.label_learning_time = QLabel(self)
         self.label_learning_time.setAlignment(Qt.AlignRight)
 
         self.status_bar.addPermanentWidget(self.label_learning_time)
         self.label_learning_time.setText(
-            f'Learning time: 00:00'
-            f' / total {ms2min_sec(self.learning_time_ms_total)}')
+            f"Learning time: 00:00"
+            f" / total {ms2min_sec(self.learning_time_ms_total)}"
+        )
 
         # Timer for learning time
         self.timer_learning_time = QTimer(self)
@@ -198,10 +219,10 @@ class MainWindow(QMainWindow):
         self.player.setNotifyInterval(50)
         self.player.setVolume(50)
         self.player_buf = QBuffer()
-        self.path_media = ''
+        self.path_media = ""
         self.music_data = None
         self.duration_ms = 0
-        self.duration_str = ''
+        self.duration_str = ""
 
         # A/B Loop
         self.pos_loop_a = None
@@ -217,11 +238,11 @@ class MainWindow(QMainWindow):
         layout_volume = QHBoxLayout()
         layout_btn_progress = QVBoxLayout()
         layout_music_btns = QHBoxLayout()
-        self.btn_rewind = QPushButton(qta.icon("fa.backward"), '', self)
+        self.btn_rewind = QPushButton(qta.icon("fa.backward"), "", self)
         self.btn_rewind.clicked.connect(self.rewind)
-        self.btn_play = QPushButton(self.ico_play, '', self)
+        self.btn_play = QPushButton(self.ico_play, "", self)
         self.btn_play.clicked.connect(self.play)
-        self.btn_fastforward = QPushButton(qta.icon("fa.forward"), '', self)
+        self.btn_fastforward = QPushButton(qta.icon("fa.forward"), "", self)
         self.btn_fastforward.clicked.connect(self.fastforward)
 
         self.btn_rewind.setFocusPolicy(Qt.NoFocus)
@@ -270,7 +291,7 @@ class MainWindow(QMainWindow):
 
         # Auto Play
         self.update_recent_file_action()
-        path = self.setting.get('LastPlayedPath', '')
+        path = self.setting.get("LastPlayedPath", "")
         if osp.isfile(path):
             self.load_music_file(path)
 
@@ -278,18 +299,19 @@ class MainWindow(QMainWindow):
 
     def init_menu(self):
         """Init menu."""
-        color_icon = '#87939A'
+        color_icon = "#87939A"
         menu_bar = self.menuBar()
         menu_bar.setNativeMenuBar(False)  # Don't use mac native menu bar
 
         # File
-        file_menu = menu_bar.addMenu('&File')
+        file_menu = menu_bar.addMenu("&File")
 
         # Open
         open_action = QAction(
-            qta.icon("ei.folder-open", color=color_icon), '&Open', self)
-        open_action.setShortcut('Ctrl+O')
-        open_action.setStatusTip('Open file')
+            qta.icon("ei.folder-open", color=color_icon), "&Open", self
+        )
+        open_action.setShortcut("Ctrl+O")
+        open_action.setStatusTip("Open file")
         open_action.triggered.connect(self.open_music_file)
         file_menu.addAction(open_action)
         file_menu.addSeparator()
@@ -297,36 +319,41 @@ class MainWindow(QMainWindow):
         # Recent Files
         for i in range(MainWindow.max_recent_files):
             self.recent_file_acts.append(
-                QAction(self, visible=False, triggered=self.load_recent_music))
+                QAction(self, visible=False, triggered=self.load_recent_music)
+            )
         for i in range(MainWindow.max_recent_files):
             file_menu.addAction(self.recent_file_acts[i])
 
         file_menu.addSeparator()
 
         # Exit
-        exit_action = QAction(
-            qta.icon("mdi.exit-run", color=color_icon), '&Exit', self)
-        exit_action.setShortcut('Ctrl+Q')
-        exit_action.setStatusTip('Exit App')
+        exit_action = QAction(qta.icon("mdi.exit-run", color=color_icon), "&Exit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.setStatusTip("Exit App")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
         # Help
-        help_menu = menu_bar.addMenu('&Help')
-        about_action = QAction("&About", self,
-                               statusTip="Show the application's About box",
-                               triggered=self.about)
+        help_menu = menu_bar.addMenu("&Help")
+        about_action = QAction(
+            "&About",
+            self,
+            statusTip="Show the application's About box",
+            triggered=self.about,
+        )
         help_menu.addAction(about_action)
 
     def about(self):
         """Show messagebox for about."""
         QMessageBox.about(
-            self, "About music player a/b loop",
-            "The music player a/b loop is made by <b>ok97465</b>")
+            self,
+            "About music player a/b loop",
+            "The music player a/b loop is made by <b>ok97465</b>",
+        )
 
     def update_recent_file_action(self):
         """Update recent file action."""
-        files = self.setting.get('recent_files', [])
+        files = self.setting.get("recent_files", [])
 
         num_recent_files = min(len(files), MainWindow.max_recent_files)
 
@@ -344,8 +371,10 @@ class MainWindow(QMainWindow):
         self.stop()
         fname = QFileDialog.getOpenFileName(
             self,
-            'Open music file', '/home/ok97465',
-            filter='Music Files (*.mp3, *.m4a)')
+            "Open music file",
+            "/home/ok97465",
+            filter="Music Files (*.mp3, *.m4a)",
+        )
         self.load_music_file(fname[0])
 
     def load_music_file(self, path: str):
@@ -354,12 +383,12 @@ class MainWindow(QMainWindow):
             return
         self.path_media = path
 
-        path_lyrics = path[:-3] + 'vtt'
+        path_lyrics = path[:-3] + "vtt"
         self.display_lyrics.read_vtt(path_lyrics)
 
         fp = io.BytesIO()
         self.music_data = AudioSegment.from_file(path)
-        self.music_data.export(fp, format='wav')
+        self.music_data.export(fp, format="wav")
         self.player_buf.setData(fp.getvalue())
         self.player_buf.open(QIODevice.ReadOnly)
         self.player.setMedia(QMediaContent(), self.player_buf)
@@ -374,7 +403,7 @@ class MainWindow(QMainWindow):
     def load_setting(self):
         """Load setting file."""
         try:
-            with open('setting.json', 'r') as fp:
+            with open("setting.json", "r") as fp:
                 self.setting = json.load(fp)
         except FileNotFoundError:
             pass
@@ -383,7 +412,6 @@ class MainWindow(QMainWindow):
         key = event.key()
         shift = event.modifiers() & Qt.ShiftModifier
         if shift:
-
             if key == Qt.Key_O:
                 self.adjust_ab_loop(-100)
         else:
@@ -399,15 +427,15 @@ class MainWindow(QMainWindow):
                 self.control_volume(5)
             elif key == Qt.Key_Down:
                 self.control_volume(-5)
-            elif key in [Qt.Key_I, Qt.Key_W]:
+            elif key in [Qt.Key_I, Qt.Key_W, Qt.Key_Menu]:
                 self.set_ab_loop()
             elif key == Qt.Key_O:
                 self.adjust_ab_loop(500)
-            elif key == Qt.Key_Space:
+            elif key in [Qt.Key_Space, Qt.Key_Hangul_Hanja]:
                 self.play()
-            elif key == Qt.Key_S:
+            elif key in [Qt.Key_S]:
                 self.save_ab_loop()
-            elif key in [Qt.Key_Q, Qt.Key_U]:
+            elif key in [Qt.Key_Q, Qt.Key_U, Qt.Key_Slash]:
                 self.send_AB_loop_lyrics_to_papago()
 
         super().keyPressEvent(event)
@@ -444,11 +472,13 @@ class MainWindow(QMainWindow):
 
         if is_playing:
             self.player.pause()
-        path_new = (self.path_media[:-4]
-                    + f"{self.pos_loop_a}_{self.pos_loop_b}"
-                    + self.path_media[-4:])
-        seg = self.music_data[self.pos_loop_a:self.pos_loop_b]
-        seg.export(path_new, format='mp3')
+        path_new = (
+            self.path_media[:-4]
+            + f"{self.pos_loop_a}_{self.pos_loop_b}"
+            + self.path_media[-4:]
+        )
+        seg = self.music_data[self.pos_loop_a : self.pos_loop_b]
+        seg.export(path_new, format="mp3")
 
         if is_playing:
             self.player.play()
@@ -469,7 +499,7 @@ class MainWindow(QMainWindow):
         self.save_current_media_info()
         self.player.stop()
         self.player_buf.close()
-        self.path_media = ''
+        self.path_media = ""
         self.pos_loop_b = None
         self.pos_loop_a = None
         self.timer_learning_time.stop()
@@ -509,7 +539,7 @@ class MainWindow(QMainWindow):
             duration_ms = self.player.duration()
             self.duration_ms = duration_ms
             self.duration_str = ms2min_sec(duration_ms)
-            self.elapsed_time.setText(f'00:00 / {self.duration_str}')
+            self.elapsed_time.setText(f"00:00 / {self.duration_str}")
             self.progressbar.setMaximum(duration_ms)
             music_basename = osp.splitext(osp.basename(self.path_media))[0]
             self.label_music.setText(music_basename)
@@ -527,8 +557,8 @@ class MainWindow(QMainWindow):
             except ValueError:
                 pass
             files.insert(0, path)
-            del files[MainWindow.max_recent_files:]
-            self.setting['recent_files'] = files
+            del files[MainWindow.max_recent_files :]
+            self.setting["recent_files"] = files
             self.update_recent_file_action()
 
         # Player state
@@ -543,12 +573,10 @@ class MainWindow(QMainWindow):
     def qmp_position_changed(self, position_ms: int):
         """Handle position of qmedia if the position is changed."""
         if self.pos_loop_b:
-            if ((position_ms == self.duration_ms)
-                    or (self.pos_loop_b < position_ms)):
+            if (position_ms == self.duration_ms) or (self.pos_loop_b < position_ms):
                 self.player.setPosition(self.pos_loop_a)
         self.progressbar.setValue(position_ms)
-        self.elapsed_time.setText(
-            f'{ms2min_sec(position_ms)} / {self.duration_str}')
+        self.elapsed_time.setText(f"{ms2min_sec(position_ms)} / {self.duration_str}")
         self.display_lyrics.update_media_pos(position_ms)
 
     def qdial_changed(self, pos: int):
@@ -559,10 +587,13 @@ class MainWindow(QMainWindow):
         """Send AB loop lyrics to papago."""
         if not self.pos_loop_b:
             return
-        lyrics = self.display_lyrics.get_lyrics_in_range(self.pos_loop_a,
-                                                         self.pos_loop_b)
-        lyrics = lyrics.replace('\n', '')
-        webbrowser.open(f'https://papago.naver.com/?sk=en&tk=ko&st={lyrics}')
+        lyrics = self.display_lyrics.get_lyrics_in_range(
+            self.pos_loop_a, self.pos_loop_b
+        )
+        lyrics = lyrics.replace("\n", "")
+        webbrowser.open(
+            f"https://papago.naver.com/?sk=en&tk=ko&st={lyrics}", autoraise=False
+        )
 
     @Slot(int)
     def set_media_position(self, position_ms: int):
@@ -576,42 +607,44 @@ class MainWindow(QMainWindow):
         if self.path_media:
             position = self.player.position()
             self.setting[self.path_media] = position
-            self.setting['LastPlayedPath'] = self.path_media
+            self.setting["LastPlayedPath"] = self.path_media
 
     def update_learning_time(self):
         """Update learning time."""
         self.learning_time_ms += 1000
         self.learning_time_ms_total += 1000
         self.label_learning_time.setText(
-            f'Learning time : {ms2min_sec(self.learning_time_ms)}'
-            f' / total : {ms2min_sec(self.learning_time_ms_total)}')
+            f"Learning time : {ms2min_sec(self.learning_time_ms)}"
+            f" / total : {ms2min_sec(self.learning_time_ms_total)}"
+        )
 
     def closeEvent(self, event):
         """Save setting."""
         self.stop()
-        self.setting['learning_time_ms_total'] = self.learning_time_ms_total
+        self.setting["learning_time_ms_total"] = self.learning_time_ms_total
 
-        with open('setting.json', 'w') as fp:
+        with open("setting.json", "w") as fp:
             json.dump(self.setting, fp, indent=2)
 
         now = self.now
         cur = sqlite3.connect("history.db")
         cur.execute(
-            'CREATE TABLE IF NOT EXISTS LearningTimeData('
-            'DayOfWeek INTEGER, '
-            'month  INTEGER, '
-            'day INTEGER,  '
-            'timestamp REAL, '
-            'LearningTime_ms INTEGER)')
+            "CREATE TABLE IF NOT EXISTS LearningTimeData("
+            "DayOfWeek INTEGER, "
+            "month  INTEGER, "
+            "day INTEGER,  "
+            "timestamp REAL, "
+            "LearningTime_ms INTEGER)"
+        )
         cur.execute(
             "insert into LearningTimeData Values (?,?,?,?,?)",
-            (now.weekday(), now.month, now.day, now.timestamp(),
-             self.learning_time_ms))
+            (now.weekday(), now.month, now.day, now.timestamp(), self.learning_time_ms),
+        )
         cur.commit()
         cur.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     style_sheet = qdarkstyle.load_stylesheet_pyside2()
     app.setStyleSheet(style_sheet)
